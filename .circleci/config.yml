@@ -69,7 +69,7 @@ jobs:
       - kublr-api/get-cluster-config:
           kublr-space: $KUBLR_SPACE
           kublr-cluster: $KUBLR_CLUSTER
-          insecure: true
+          insecure: false
       - run:
           name: Print KUBECONFIG env var
           command: 'echo "KUBECONFIG=${KUBECONFIG:-}"'
