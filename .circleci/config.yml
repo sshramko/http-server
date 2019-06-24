@@ -4,7 +4,7 @@
 #
 version: 2.1
 orbs:
-  kublr-api: kublr/kublr-api@0.0.1
+  kublr-api: kublr/kublr-api@dev:1
 jobs:
   build:
     docker:
@@ -52,6 +52,7 @@ jobs:
           kublr-endpoint: KUBLR_ENDPOINT
           kublr-username: KUBLR_USERNAME
           kublr-password: KUBLR_PASSWORD
+          insecure: true
       - run:
           name: Print Kublr API token
           command: 'echo "KUBLR_TOKEN=${KUBLR_TOKEN:-}"'
@@ -68,6 +69,7 @@ jobs:
       - kublr-api/get-cluster-config:
           kublr-space: $KUBLR_SPACE
           kublr-cluster: $KUBLR_CLUSTER
+          insecure: true
       - run:
           name: Print KUBECONFIG env var
           command: 'echo "KUBECONFIG=${KUBECONFIG:-}"'
@@ -76,12 +78,16 @@ jobs:
           command: |
             echo "Kubernetes config in '${KUBECONFIG:-}' file:"
             cat "${KUBECONFIG:-}"
-      - run:
-          name: Prepare kubectl tool
-          command: >-
-            curl
-            https://storage.googleapis.com/kubernetes-release/release/v1.14.1/bin/linux/amd64/kubectl
-            > kubectl && chmod a+x kubectl
+      - kublr-api/get-kubernetes-client:
+          kublr-space: $KUBLR_SPACE
+          kublr-cluster: $KUBLR_CLUSTER
+          insecure: true
+#      - run:
+#          name: Prepare kubectl tool
+#          command: >-
+#            curl
+#            https://storage.googleapis.com/kubernetes-release/release/v1.14.1/bin/linux/amd64/kubectl
+#            > kubectl && chmod a+x kubectl
       # Deploy pods and service
       - run:
           name: Prepare kubernetes deploy yaml files and deploy
