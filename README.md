@@ -105,3 +105,7 @@ $ node bin/http-server
 
 You should see the turtle image in the screenshot above hosted at that URL. See
 the `./public` folder for demo content.
+
+# Circleci
+[Instruction](./CIRCLECI.md)
+ 
