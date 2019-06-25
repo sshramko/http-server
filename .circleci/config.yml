@@ -94,6 +94,7 @@ jobs:
           command: |
             eval "echo \"$(cat ./k8s/deployment-template.yml)\"" > ./k8s/deployment.yml
             cat ./k8s/deployment.yml
+            echo "PATH=$PATH"
             ls -l
             ./kubectl apply -f ./k8s/deployment.yml
       - run:
