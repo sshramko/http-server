@@ -15,7 +15,6 @@ jobs:
 
     steps:
       - checkout
-      # Download and cache dependencies
       - restore_cache:
           keys:
             - v1-dependencies-{{ checksum "package.json" }}
@@ -29,33 +28,18 @@ jobs:
             - node_modules
           key: v1-dependencies-{{ checksum "package.json" }}
 
-      # run tests!
       - run: npm test
-      # Start building docker container
-      - setup_remote_docker
       - run:
           name: Generate docker image name
           command: |
             echo 'export DEPLOY_DOCKER_IMAGE=$IMAGE_NAME:$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM' >> $BASH_ENV
             echo "Docker image $DEPLOY_DOCKER_IMAGE"
             source $BASH_ENV
-#      - run:
-#          name: Build Docker image
-#          command: docker build -t $DEPLOY_DOCKER_IMAGE .
-#      - run:
-#          name: Publish Docker Image to Docker Hub
-#          command: |
-#            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-#            echo "Pushing image $DEPLOY_DOCKER_IMAGE"
-#            docker push $DEPLOY_DOCKER_IMAGE
       - kublr-api/auth:
           kublr-endpoint: KUBLR_ENDPOINT
           kublr-username: KUBLR_USERNAME
           kublr-password: KUBLR_PASSWORD
           insecure: true
-#      - kublr-api/call:
-#          result-env-var: KUBLR_VERSION_JSON
-#          result-file: kublr-version.json
       - kublr-api/call:
           call-method: POST
           call-path: "/api/spaces/$KUBLR_NAMESPACE/cluster"
@@ -69,7 +53,7 @@ jobs:
             export CLUSTER_NAME=$(cat cluster-result.json | jq -r '.metadata.name')
             export CLUSTER_ID=$(cat cluster-result.json | jq -r '.id')
             echo "Cluster id=$CLUSTER_ID space=$CLUSTER_SPACE"
-            if [ "<<parameters.insecure>>" == "true" ]; then
+            if [ "true" == "true" ]; then
               HEADERS=(-k --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
             else
               HEADERS=(-s --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
@@ -111,69 +95,5 @@ jobs:
         name: Print config
         command: |
           cat config
-#          echo "space=$CLUSTER_SPACE name=$CLUSTER_NAME id=$CLUSTER_ID"
-
-
-
-
-#            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-#            echo "Pushing image $DEPLOY_DOCKER_IMAGE"
-#            docker push $DEPLOY_DOCKER_IMAGE
-
-#      - run:
-#          name: Print Kublr API token
-#          command: 'echo "KUBLR_TOKEN=${KUBLR_TOKEN:-}"'
-#      - run:
-#          name: Print Kublr API call results stored in an env var
-#          command: 'echo "KUBLR_VERSION_JSON=${KUBLR_VERSION_JSON:-}"'
-#      - run:
-#          name: Print Kublr API call results stored in a file
-#          command: cat kublr-version.json
-#      - kublr-api/get-cluster-config:
-#          kublr-space: $KUBLR_SPACE
-#          kublr-cluster: $KUBLR_CLUSTER
-#          insecure: false
-#      - run:
-#          name: Print KUBECONFIG env var
-#          command: 'echo "KUBECONFIG=${KUBECONFIG:-}"'
-#      - run:
-#          name: Print Kubernetes config file content
-#          command: |
-#            echo "Kubernetes config in '${KUBECONFIG:-}' file:"
-#            cat "${KUBECONFIG:-}"
-#      - kublr-api/get-kubernetes-client:
-#          kublr-space: $KUBLR_SPACE
-#          kublr-cluster: $KUBLR_CLUSTER
-#          insecure: true
-#      # Deploy pods and service
-#      - run:
-#          name: Prepare kubernetes deploy yaml files and deploy
-#          command: |
-#            eval "echo \"$(cat ./k8s/deployment-template.yml)\"" > ./k8s/deployment.yml
-#            cat ./k8s/deployment.yml
-#            echo "PATH=$PATH"
-#            ./kubectl apply -f ./k8s/deployment.yml
-#      - run:
-#          name: Install service and ingress
-#          command: |
-#            SERVICES_COUNT=$(./kubectl get services | awk '{print $1}' | grep -c "http-server-demo-service" || true)
-#            echo "Service count $SERVICES_COUNT"
-#            if [ "$SERVICES_COUNT" == "0" ]; then
-#                echo "Create service"
-#                ./kubectl apply -f ./k8s/service.yml
-#            else
-#                echo "Service already exist"
-#            fi
-#            INGRESS_COUNT=$(./kubectl get ingress | awk '{print $1}' | grep -c "http-server-demo-ingress" || true)
-#            echo "Ingress count $INGRESS_COUNT"
-#            if [ "$INGRESS_COUNT" == "0" ]; then
-#                echo "Create service"
-#                ./kubectl apply -f ./k8s/ingress.yml
-#            else
-#                echo "Ingress already exist"
-#            fi
-#
-#            PUBLIC_HOSTNAME="$(./kubectl get service -n kube-system kublr-feature-ingress-nginx-ingress-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
-#            echo "Public hostname $PUBLIC_HOSTNAME"
 
 
