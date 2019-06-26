@@ -84,16 +84,16 @@ jobs:
             done
             echo "Cluster state is Ready"
       - run:
-        name: Print env vars
-        command: |
+          name: Print env vars
+          command: |
             echo "space=$CLUSTER_SPACE name=$CLUSTER_NAME id=$CLUSTER_ID"
       - kublr-api/get-cluster-config:
           kublr-space: $CLUSTER_SPACE
           kublr-cluster: $CLUSTER_NAME
           insecure: false
       - run:
-        name: Print config
-        command: |
-          cat config
+          name: Print config
+          command: |
+            cat ./config
 
 
