@@ -31,7 +31,7 @@ jobs:
 
       # run tests!
       - run: npm test
-       Start building docker container
+      # Start building docker container
       - setup_remote_docker
       - run:
           name: Generate docker image name
