@@ -49,15 +49,16 @@ jobs:
       - run:
           name: Check while cluster will have Running status
           command: |
+            ls -l
             export CLUSTER_SPACE=$(cat cluster-result.json | jq -r '.metadata.space')
             export CLUSTER_NAME=$(cat cluster-result.json | jq -r '.metadata.name')
             export CLUSTER_ID=$(cat cluster-result.json | jq -r '.id')
             echo "Cluster id=$CLUSTER_ID space=$CLUSTER_SPACE"
-            if [ "true" == "true" ]; then
-              HEADERS=(-k --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
-            else
+#            if [ "true" == "true" ]; then
+#              HEADERS=(-k --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
+#            else
               HEADERS=(-s --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
-            fi
+#            fi
 
             echo "HEADERS=${HEADERS[@]}"
 
