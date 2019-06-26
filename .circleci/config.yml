@@ -4,7 +4,7 @@
 #
 version: 2.1
 orbs:
-  kublr-api: kublr/kublr-api@dev:1
+  kublr-api: kublr/kublr-api@dev:5
 jobs:
   build:
     docker:
@@ -15,54 +15,49 @@ jobs:
 
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - v1-dependencies-{{ checksum "package.json" }}
-            # fallback to using the latest cache if no exact match is found
-            - v1-dependencies-
-
-      - run: npm install
-
-      - save_cache:
-          paths:
-            - node_modules
-          key: v1-dependencies-{{ checksum "package.json" }}
-
-      - run: npm test
-      - run:
-          name: Generate docker image name
-          command: |
-            echo 'export DEPLOY_DOCKER_IMAGE=$IMAGE_NAME:$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM' >> $BASH_ENV
-            echo "Docker image $DEPLOY_DOCKER_IMAGE"
-            source $BASH_ENV
       - kublr-api/auth:
           kublr-endpoint: KUBLR_ENDPOINT
           kublr-username: KUBLR_USERNAME
           kublr-password: KUBLR_PASSWORD
           insecure: true
+      - run:
+          name: Set variables
+          command: |
+            if [ -z "$CLUSTER_SPACE" ]; then
+                CLUSTER_SPACE='default'
+                echo "export CLUSTER_SPACE='${CLUSTER_SPACE}'" >> $BASH_ENV
+                echo "/api/spaces/$CLUSTER_SPACE/cluster"
+                source $BASH_ENV
+            fi
+      - run:
+          name: Print variables
+          command: |
+            echo "Cluster space $CLUSTER_SPACE"
+            echo "Endpoint $KUBLR_ENDPOINT"
+            echo "Token $KUBLR_TOKEN"
+            printenv || true
       - kublr-api/call:
           call-method: POST
-          call-path: "/api/spaces/$KUBLR_NAMESPACE/cluster"
+          call-path: "/api/spaces/$CLUSTER_SPACE/cluster"
           call-data-file: "./k8s/cluster-spec.json"
           result-file: "cluster-result.json"
           insecure: true
       - run:
           name: Check while cluster will have Running status
           command: |
-            ls -l
-            export CLUSTER_SPACE=$(cat cluster-result.json | jq -r '.metadata.space')
-            export CLUSTER_NAME=$(cat cluster-result.json | jq -r '.metadata.name')
-            export CLUSTER_ID=$(cat cluster-result.json | jq -r '.id')
+            cat cluster-result.json
+            CLUSTER_SPACE=$(cat cluster-result.json | jq -r '.metadata.space')
+            CLUSTER_NAME=$(cat cluster-result.json | jq -r '.metadata.name')
+            CLUSTER_ID=$(cat cluster-result.json | jq -r '.id')
+            echo "export CLUSTER_SPACE='${CLUSTER_ID}'" >> $BASH_ENV
+            echo "export CLUSTER_NAME='${CLUSTER_ID}'" >> $BASH_ENV
+            echo "export CLUSTER_NAME='${CLUSTER_ID}'" >> $BASH_ENV
             echo "Cluster id=$CLUSTER_ID space=$CLUSTER_SPACE"
-#            if [ "true" == "true" ]; then
-#              HEADERS=(-k --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
-#            else
-              HEADERS=(-s --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
-#            fi
+            HEADERS=(-s --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
 
             echo "HEADERS=${HEADERS[@]}"
 
-            echo "Create cluster with id $CLUSTER_ID name $KUBLR_CLUSTERNAME"
+            echo "Create cluster with id $CLUSTER_ID name $CLUSTER_NAME"
 
             REQ_URL="$KUBLR_ENDPOINT/api/spaces/$CLUSTER_SPACE/cluster/$CLUSTER_NAME/id/$CLUSTER_ID"
 
@@ -75,7 +70,7 @@ jobs:
                 if [ "$CLUSTER_STATE" == "Running" ]; then
                     echo "Cluster is running"
                     break;
-                elif [ "$CLUSTER_STATE" == ""  -o  "$CLUSTER_STATE" == "Creating" ]; then
+                elif [ "$CLUSTER_STATE" == "" -o "$CLUSTER_STATE" == "Creating" -o "$CLUSTER_STATE" == "Draft" ]; then
                     echo "Waiting creation, current status $CLUSTER_STATE"
                     sleep 10
                 else
@@ -95,6 +90,7 @@ jobs:
       - run:
           name: Print config
           command: |
+            ls -l
             cat ./config
 
 
