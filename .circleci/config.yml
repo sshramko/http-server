@@ -36,12 +36,18 @@ jobs:
       - run:
           name: Generate docker image name
           command: |
-            echo 'export DEPLOY_DOCKER_IMAGE=$IMAGE_NAME:$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM' >> $BASH_ENV
-            echo "Docker image $DEPLOY_DOCKER_IMAGE"
+            DEPLOY_DOCKER_IMAGE="$IMAGE_NAME:$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM"
+            echo "export DEPLOY_DOCKER_IMAGE='$DEPLOY_DOCKER_IMAGE'" >> $BASH_ENV
+            echo "Docker image '$DEPLOY_DOCKER_IMAGE'"
             source $BASH_ENV
+            echo "$BASH_ENV"
+            cat "$BASH_ENV"
       - run:
           name: Build Docker image
-          command: docker build -t $DEPLOY_DOCKER_IMAGE .
+          command: |
+            printenv
+            echo "Building docker image '$DEPLOY_DOCKER_IMAGE'"
+            docker build -t $DEPLOY_DOCKER_IMAGE .
       - run:
           name: Publish Docker Image to Docker Hub
           command: |
@@ -69,49 +75,60 @@ jobs:
             echo "Endpoint $KUBLR_ENDPOINT"
             echo "Token $KUBLR_TOKEN"
             printenv || true
-      - kublr-api/call:
-          call-method: POST
-          call-path: "/api/spaces/$CLUSTER_SPACE/cluster"
-          call-data-file: "./k8s/cluster-spec.json"
-          result-file: "cluster-result.json"
-          insecure: true
       - run:
-          name: Check while cluster will have Running status
+          name: Set cluster variables for testing
           command: |
-            cat cluster-result.json
-            CLUSTER_SPACE=$(cat cluster-result.json | jq -r '.metadata.space')
-            CLUSTER_NAME=$(cat cluster-result.json | jq -r '.metadata.name')
-            CLUSTER_ID=$(cat cluster-result.json | jq -r '.id')
+            CLUSTER_SPACE='default'
+            CLUSTER_NAME='circleci-demo'
+            CLUSTER_ID='5d14a27f3cc7fc00013e157c'
             echo "export CLUSTER_SPACE='${CLUSTER_SPACE}'" >> $BASH_ENV
             echo "export CLUSTER_NAME='${CLUSTER_NAME}'" >> $BASH_ENV
             echo "export CLUSTER_ID='${CLUSTER_ID}'" >> $BASH_ENV
             echo "Cluster id=$CLUSTER_ID name=$CLUSTER_NAME space=$CLUSTER_SPACE"
-            HEADERS=(-s --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
 
-            echo "HEADERS=${HEADERS[@]}"
-
-            echo "Create cluster with id $CLUSTER_ID name $CLUSTER_NAME"
-
-            REQ_URL="$KUBLR_ENDPOINT/api/spaces/$CLUSTER_SPACE/cluster/$CLUSTER_NAME/id/$CLUSTER_ID"
-
-            START_TIME=$(date +%s)
-            TIMEOUT=900
-            echo $START_TIME
-            while (( "$(date +%s) - $START_TIME" < ${TIMEOUT} ))
-            do
-                CLUSTER_STATE=$(curl -X GET "${HEADERS[@]}" $REQ_URL| jq -r '.status.state')
-                if [ "$CLUSTER_STATE" == "Running" ]; then
-                    echo "Cluster is running"
-                    break;
-                elif [ "$CLUSTER_STATE" == "" -o "$CLUSTER_STATE" == "Creating" ]; then
-                    echo "Waiting creation, current status $CLUSTER_STATE"
-                    sleep 10
-                else
-                    echo "Cluster state is $CLUSTER_STATE"
-                    exit 1
-                fi
-            done
-            echo "Cluster state is Ready"
+#      - kublr-api/call:
+#          call-method: POST
+#          call-path: "/api/spaces/$CLUSTER_SPACE/cluster"
+#          call-data-file: "./k8s/cluster-spec.json"
+#          result-file: "cluster-result.json"
+#          insecure: true
+#      - run:
+#          name: Check while cluster will have Running status
+#          command: |
+#            cat cluster-result.json
+#            CLUSTER_SPACE=$(cat cluster-result.json | jq -r '.metadata.space')
+#            CLUSTER_NAME=$(cat cluster-result.json | jq -r '.metadata.name')
+#            CLUSTER_ID=$(cat cluster-result.json | jq -r '.id')
+#            echo "export CLUSTER_SPACE='${CLUSTER_SPACE}'" >> $BASH_ENV
+#            echo "export CLUSTER_NAME='${CLUSTER_NAME}'" >> $BASH_ENV
+#            echo "export CLUSTER_ID='${CLUSTER_ID}'" >> $BASH_ENV
+#            echo "Cluster id=$CLUSTER_ID name=$CLUSTER_NAME space=$CLUSTER_SPACE"
+#            HEADERS=(-s --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
+#
+#            echo "HEADERS=${HEADERS[@]}"
+#
+#            echo "Create cluster with id $CLUSTER_ID name $CLUSTER_NAME"
+#
+#            REQ_URL="$KUBLR_ENDPOINT/api/spaces/$CLUSTER_SPACE/cluster/$CLUSTER_NAME/id/$CLUSTER_ID"
+#
+#            START_TIME=$(date +%s)
+#            TIMEOUT=900
+#            echo $START_TIME
+#            while (( "$(date +%s) - $START_TIME" < ${TIMEOUT} ))
+#            do
+#                CLUSTER_STATE=$(curl -X GET "${HEADERS[@]}" $REQ_URL| jq -r '.status.state')
+#                if [ "$CLUSTER_STATE" == "Running" ]; then
+#                    echo "Cluster is running"
+#                    break;
+#                elif [ "$CLUSTER_STATE" == "" -o "$CLUSTER_STATE" == "Creating" ]; then
+#                    echo "Waiting creation, current status $CLUSTER_STATE"
+#                    sleep 10
+#                else
+#                    echo "Cluster state is $CLUSTER_STATE"
+#                    exit 1
+#                fi
+#            done
+#            echo "Cluster state is Ready"
       - run:
           name: Print env vars
           command: |
@@ -137,7 +154,7 @@ jobs:
             cat ./k8s/deployment.yml
             echo "PATH=$PATH"
             ls -l
-            ## ./kubectl apply -f ./k8s/deployment.yml
+            ./kubectl apply -f ./k8s/deployment.yml
       - run:
           name: Install service and ingress
           command: |
