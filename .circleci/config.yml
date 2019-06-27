@@ -70,7 +70,7 @@ jobs:
                 if [ "$CLUSTER_STATE" == "Running" ]; then
                     echo "Cluster is running"
                     break;
-                elif [ "$CLUSTER_STATE" == "" -o "$CLUSTER_STATE" == "Creating" -o "$CLUSTER_STATE" == "Draft" ]; then
+                elif [ "$CLUSTER_STATE" == "" -o "$CLUSTER_STATE" == "Creating" ]; then
                     echo "Waiting creation, current status $CLUSTER_STATE"
                     sleep 10
                 else
@@ -92,5 +92,17 @@ jobs:
           command: |
             ls -l
             cat ./config
+      - kublr-api/get-kubernetes-client:
+          kublr-space: $CLUSTER_SPACE
+          kublr-cluster: $CLUSTER_NAME
+          insecure: true
+      - run:
+          name: Prepare kubernetes deploy yaml files and deploy
+          command: |
+            eval "echo \"$(cat ./k8s/deployment-template.yml)\"" > ./k8s/deployment.yml
+            cat ./k8s/deployment.yml
+            echo "PATH=$PATH"
+            ls -l
+            ## ./kubectl apply -f ./k8s/deployment.yml
 
 
