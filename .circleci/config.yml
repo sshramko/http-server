@@ -15,6 +15,39 @@ jobs:
 
     steps:
       - checkout
+      # Download and cache dependencies
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "package.json" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+
+      - run: npm install
+
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+
+      # run tests!
+      - run: npm test
+      # Start building docker container
+      - setup_remote_docker
+      - run:
+          name: Generate docker image name
+          command: |
+            echo 'export DEPLOY_DOCKER_IMAGE=$IMAGE_NAME:$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM' >> $BASH_ENV
+            echo "Docker image $DEPLOY_DOCKER_IMAGE"
+            source $BASH_ENV
+      - run:
+          name: Build Docker image
+          command: docker build -t $DEPLOY_DOCKER_IMAGE .
+      - run:
+          name: Publish Docker Image to Docker Hub
+          command: |
+            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            echo "Pushing image $DEPLOY_DOCKER_IMAGE"
+            docker push $DEPLOY_DOCKER_IMAGE
       - kublr-api/auth:
           kublr-endpoint: KUBLR_ENDPOINT
           kublr-username: KUBLR_USERNAME
@@ -49,10 +82,10 @@ jobs:
             CLUSTER_SPACE=$(cat cluster-result.json | jq -r '.metadata.space')
             CLUSTER_NAME=$(cat cluster-result.json | jq -r '.metadata.name')
             CLUSTER_ID=$(cat cluster-result.json | jq -r '.id')
-            echo "export CLUSTER_SPACE='${CLUSTER_ID}'" >> $BASH_ENV
-            echo "export CLUSTER_NAME='${CLUSTER_ID}'" >> $BASH_ENV
-            echo "export CLUSTER_NAME='${CLUSTER_ID}'" >> $BASH_ENV
-            echo "Cluster id=$CLUSTER_ID space=$CLUSTER_SPACE"
+            echo "export CLUSTER_SPACE='${CLUSTER_SPACE}'" >> $BASH_ENV
+            echo "export CLUSTER_NAME='${CLUSTER_NAME}'" >> $BASH_ENV
+            echo "export CLUSTER_ID='${CLUSTER_ID}'" >> $BASH_ENV
+            echo "Cluster id=$CLUSTER_ID name=$CLUSTER_NAME space=$CLUSTER_SPACE"
             HEADERS=(-s --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
 
             echo "HEADERS=${HEADERS[@]}"
@@ -99,10 +132,35 @@ jobs:
       - run:
           name: Prepare kubernetes deploy yaml files and deploy
           command: |
+            ls -l
             eval "echo \"$(cat ./k8s/deployment-template.yml)\"" > ./k8s/deployment.yml
             cat ./k8s/deployment.yml
             echo "PATH=$PATH"
             ls -l
             ## ./kubectl apply -f ./k8s/deployment.yml
+      - run:
+          name: Install service and ingress
+          command: |
+            SERVICES_COUNT=$(./kubectl get services | awk '{print $1}' | grep -c "http-server-demo-service" || true)
+            echo "Service count $SERVICES_COUNT"
+            if [ "$SERVICES_COUNT" == "0" ]; then
+                echo "Create service"
+                ./kubectl apply -f ./k8s/service.yml
+            else
+                echo "Service already exist"
+            fi
+            INGRESS_COUNT=$(./kubectl get ingress | awk '{print $1}' | grep -c "http-server-demo-ingress" || true)
+            echo "Ingress count $INGRESS_COUNT"
+            if [ "$INGRESS_COUNT" == "0" ]; then
+                echo "Create service"
+                ./kubectl apply -f ./k8s/ingress.yml
+            else
+                echo "Ingress already exist"
+            fi
+
+            PUBLIC_HOSTNAME="$(./kubectl get service -n kube-system kublr-feature-ingress-nginx-ingress-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+            echo "Public hostname $PUBLIC_HOSTNAME"
+
+
 
 
