@@ -34,14 +34,17 @@ jobs:
       # Start building docker container
       - setup_remote_docker
       - run:
-          name: Generate docker image name
+          name: Set envs
           command: |
             DEPLOY_DOCKER_IMAGE="$IMAGE_NAME:$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM"
             echo "export DEPLOY_DOCKER_IMAGE='$DEPLOY_DOCKER_IMAGE'" >> $BASH_ENV
             echo "Docker image '$DEPLOY_DOCKER_IMAGE'"
+            if [ -z "$CLUSTER_SPACE" ]; then
+                CLUSTER_SPACE='default'
+                echo "export CLUSTER_SPACE='${CLUSTER_SPACE}'" >> $BASH_ENV
+                echo "/api/spaces/$CLUSTER_SPACE/cluster"
+            fi
             source $BASH_ENV
-            echo "$BASH_ENV"
-            cat "$BASH_ENV"
       - run:
           name: Build Docker image
           command: |
@@ -60,75 +63,62 @@ jobs:
           kublr-password: KUBLR_PASSWORD
           insecure: true
       - run:
-          name: Set variables
-          command: |
-            if [ -z "$CLUSTER_SPACE" ]; then
-                CLUSTER_SPACE='default'
-                echo "export CLUSTER_SPACE='${CLUSTER_SPACE}'" >> $BASH_ENV
-                echo "/api/spaces/$CLUSTER_SPACE/cluster"
-                source $BASH_ENV
-            fi
-      - run:
           name: Print variables
           command: |
-            echo "Cluster space $CLUSTER_SPACE"
-            echo "Endpoint $KUBLR_ENDPOINT"
-            echo "Token $KUBLR_TOKEN"
             printenv || true
-      - run:
-          name: Set cluster variables for testing
-          command: |
-            CLUSTER_SPACE='default'
-            CLUSTER_NAME='circleci-demo'
-            CLUSTER_ID='5d14a27f3cc7fc00013e157c'
-            echo "export CLUSTER_SPACE='${CLUSTER_SPACE}'" >> $BASH_ENV
-            echo "export CLUSTER_NAME='${CLUSTER_NAME}'" >> $BASH_ENV
-            echo "export CLUSTER_ID='${CLUSTER_ID}'" >> $BASH_ENV
-            echo "Cluster id=$CLUSTER_ID name=$CLUSTER_NAME space=$CLUSTER_SPACE"
-
-#      - kublr-api/call:
-#          call-method: POST
-#          call-path: "/api/spaces/$CLUSTER_SPACE/cluster"
-#          call-data-file: "./k8s/cluster-spec.json"
-#          result-file: "cluster-result.json"
-#          insecure: true
 #      - run:
-#          name: Check while cluster will have Running status
+#          name: Set cluster variables for testing
 #          command: |
-#            cat cluster-result.json
-#            CLUSTER_SPACE=$(cat cluster-result.json | jq -r '.metadata.space')
-#            CLUSTER_NAME=$(cat cluster-result.json | jq -r '.metadata.name')
-#            CLUSTER_ID=$(cat cluster-result.json | jq -r '.id')
+#            CLUSTER_SPACE='default'
+#            CLUSTER_NAME='circleci-demo'
+#            CLUSTER_ID='5d14a27f3cc7fc00013e157c'
 #            echo "export CLUSTER_SPACE='${CLUSTER_SPACE}'" >> $BASH_ENV
 #            echo "export CLUSTER_NAME='${CLUSTER_NAME}'" >> $BASH_ENV
 #            echo "export CLUSTER_ID='${CLUSTER_ID}'" >> $BASH_ENV
 #            echo "Cluster id=$CLUSTER_ID name=$CLUSTER_NAME space=$CLUSTER_SPACE"
-#            HEADERS=(-s --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
-#
-#            echo "HEADERS=${HEADERS[@]}"
-#
-#            echo "Create cluster with id $CLUSTER_ID name $CLUSTER_NAME"
-#
-#            REQ_URL="$KUBLR_ENDPOINT/api/spaces/$CLUSTER_SPACE/cluster/$CLUSTER_NAME/id/$CLUSTER_ID"
-#
-#            START_TIME=$(date +%s)
-#            TIMEOUT=900
-#            echo $START_TIME
-#            while (( "$(date +%s) - $START_TIME" < ${TIMEOUT} ))
-#            do
-#                CLUSTER_STATE=$(curl -X GET "${HEADERS[@]}" $REQ_URL| jq -r '.status.state')
-#                if [ "$CLUSTER_STATE" == "Running" ]; then
-#                    echo "Cluster is running"
-#                    break;
-#                elif [ "$CLUSTER_STATE" == "" -o "$CLUSTER_STATE" == "Creating" ]; then
-#                    echo "Waiting creation, current status $CLUSTER_STATE"
-#                    sleep 10
-#                else
-#                    echo "Cluster state is $CLUSTER_STATE"
-#                    exit 1
-#                fi
-#            done
-#            echo "Cluster state is Ready"
+      - kublr-api/call:
+          call-method: POST
+          call-path: "/api/spaces/$CLUSTER_SPACE/cluster"
+          call-data-file: "./k8s/cluster-spec.json"
+          result-file: "cluster-result.json"
+          insecure: true
+      - run:
+          name: Check while cluster will have Running status
+          command: |
+            cat cluster-result.json
+            CLUSTER_SPACE=$(cat cluster-result.json | jq -r '.metadata.space')
+            CLUSTER_NAME=$(cat cluster-result.json | jq -r '.metadata.name')
+            CLUSTER_ID=$(cat cluster-result.json | jq -r '.id')
+            echo "export CLUSTER_SPACE='${CLUSTER_SPACE}'" >> $BASH_ENV
+            echo "export CLUSTER_NAME='${CLUSTER_NAME}'" >> $BASH_ENV
+            echo "export CLUSTER_ID='${CLUSTER_ID}'" >> $BASH_ENV
+            echo "Cluster id=$CLUSTER_ID name=$CLUSTER_NAME space=$CLUSTER_SPACE"
+            HEADERS=(-s --header 'Content-Type: application/json' --header 'Accept: application/json' --header 'Authorization: bearer '${KUBLR_TOKEN})
+
+            echo "HEADERS=${HEADERS[@]}"
+
+            echo "Create cluster with id $CLUSTER_ID name $CLUSTER_NAME"
+
+            REQ_URL="$KUBLR_ENDPOINT/api/spaces/$CLUSTER_SPACE/cluster/$CLUSTER_NAME/id/$CLUSTER_ID"
+
+            START_TIME=$(date +%s)
+            TIMEOUT=900
+            echo $START_TIME
+            while (( "$(date +%s) - $START_TIME" < ${TIMEOUT} ))
+            do
+                CLUSTER_STATE=$(curl -X GET "${HEADERS[@]}" $REQ_URL| jq -r '.status.state')
+                if [ "$CLUSTER_STATE" == "Running" ]; then
+                    echo "Cluster is running"
+                    break;
+                elif [ "$CLUSTER_STATE" == "" -o "$CLUSTER_STATE" == "Creating" ]; then
+                    echo "Waiting creation, current status $CLUSTER_STATE"
+                    sleep 10
+                else
+                    echo "Cluster state is $CLUSTER_STATE"
+                    exit 1
+                fi
+            done
+            echo "Cluster state is Ready"
       - run:
           name: Print env vars
           command: |
@@ -140,7 +130,6 @@ jobs:
       - run:
           name: Print config
           command: |
-            ls -l
             cat ./config
       - kublr-api/get-kubernetes-client:
           kublr-space: $CLUSTER_SPACE
@@ -149,11 +138,9 @@ jobs:
       - run:
           name: Prepare kubernetes deploy yaml files and deploy
           command: |
-            ls -l
             eval "echo \"$(cat ./k8s/deployment-template.yml)\"" > ./k8s/deployment.yml
             cat ./k8s/deployment.yml
             echo "PATH=$PATH"
-            ls -l
             ./kubectl apply -f ./k8s/deployment.yml
       - run:
           name: Install service and ingress
